@@ -1,53 +1,57 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html>
 <head>
 <meta charset="UTF-8">
-<title>Chat riêng</title>
-
-<style>
-body{font-family:Arial;background:#f2f2f2}
-#box{width:360px;margin:40px auto;background:#fff;padding:10px;border-radius:10px}
-#msgs{height:300px;overflow-y:auto;border:1px solid #ddd;padding:5px}
-.me{color:#0066ff}
-.admin{color:#009933}
-</style>
+<title>Chat</title>
+<link rel="stylesheet" href="style.css">
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 </head>
 
 <body>
-<div id="box">
-  <h3>Chat với admin</h3>
-  <div id="msgs"></div>
-  <input id="txt" placeholder="Nhập tin..." style="width:75%">
-  <button onclick="send()">Gửi</button>
+<div class="chat-box">
+  <div class="header">Chat với admin</div>
+  <div class="messages" id="msgs"></div>
+  <div class="input">
+    <input id="txt" placeholder="Nhập tin...">
+    <button onclick="send()">Gửi</button>
+  </div>
 </div>
 
 <script>
-const firebaseConfig = {
-  apiKey: "API_KEY",
-  authDomain: "PROJECT.firebaseapp.com",
-  databaseURL: "https://PROJECT.firebaseio.com",
-  projectId: "PROJECT"
+const firebaseConfig={
+  apiKey:"API_KEY",
+  authDomain:"PROJECT.firebaseapp.com",
+  databaseURL:"https://PROJECT.firebaseio.com",
+  projectId:"PROJECT"
 };
 firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
+const db=firebase.database();
 
-const uid = new URLSearchParams(location.search).get("uid") || "guest_"+Date.now();
-const ref = db.ref("chats/"+uid);
+const url=new URLSearchParams(location.search);
+const uid=url.get("uid")||"guest_"+Date.now();
+const name=url.get("name")||"Khách";
 
-ref.on("child_added", s=>{
+const ref=db.ref("chats/"+uid);
+
+ref.on("child_added",s=>{
   const m=s.val();
   const d=document.createElement("div");
-  d.className=m.from;
-  d.innerText=m.text;
+  d.className="msg "+m.from;
+  d.innerText=m.name+": "+m.text;
   msgs.appendChild(d);
+  msgs.scrollTop=msgs.scrollHeight;
 });
 
 function send(){
-  if(!txt.value) return;
-  ref.push({text:txt.value,from:"me",time:Date.now()});
+  if(!txt.value)return;
+  ref.push({
+    text:txt.value,
+    from:"me",
+    name:name,
+    time:Date.now()
+  });
   txt.value="";
 }
 </script>

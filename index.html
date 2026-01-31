@@ -1,59 +1,147 @@
 <!DOCTYPE html>
-<html>
+<html lang="vi">
 <head>
 <meta charset="UTF-8">
-<title>Chat</title>
-<link rel="stylesheet" href="style.css">
+<title>Private Chat</title>
+
+<style>
+body{font-family:Arial;background:#eceff1}
+.box{width:380px;margin:20px auto;background:#fff;border-radius:12px;
+box-shadow:0 5px 20px rgba(0,0,0,.2);display:flex;flex-direction:column;height:520px}
+.header{background:#1976d2;color:#fff;padding:10px;border-radius:12px 12px 0 0}
+.msgs{flex:1;padding:10px;overflow-y:auto}
+.msg{max-width:70%;margin:6px 0;padding:8px 12px;border-radius:15px}
+.user{background:#e3f2fd;margin-left:auto}
+.admin{background:#c8e6c9}
+.input{display:flex;padding:10px;border-top:1px solid #ddd}
+input{flex:1;padding:8px;border-radius:20px;border:1px solid #ccc}
+button{margin-left:5px;border:none;background:#1976d2;color:white;padding:8px 14px;border-radius:20px}
+small{color:#666}
+</style>
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 </head>
 
 <body>
-<div class="chat-box">
-  <div class="header">Chat với admin</div>
-  <div class="messages" id="msgs"></div>
+
+<div class="box">
+  <div class="header" id="title">Chat</div>
+  <div class="msgs" id="msgs"></div>
+
   <div class="input">
     <input id="txt" placeholder="Nhập tin...">
+    <input type="file" id="file">
     <button onclick="send()">Gửi</button>
   </div>
+
+  <button onclick="exportExcel()" style="margin:5px;display:none" id="exportBtn">
+    Xuất Excel
+  </button>
 </div>
 
 <script>
+// ================= FIREBASE CONFIG =================
 const firebaseConfig={
   apiKey:"API_KEY",
   authDomain:"PROJECT.firebaseapp.com",
   databaseURL:"https://PROJECT.firebaseio.com",
-  projectId:"PROJECT"
+  projectId:"PROJECT",
+  storageBucket:"PROJECT.appspot.com"
 };
 firebase.initializeApp(firebaseConfig);
 const db=firebase.database();
+const storage=firebase.storage();
+// ===================================================
 
-const url=new URLSearchParams(location.search);
-const uid=url.get("uid")||"guest_"+Date.now();
-const name=url.get("name")||"Khách";
+// ================= ROLE =================
+const isAdmin = location.hash==="#admin";
+title.innerText = isAdmin ? "Admin Inbox" : "Chat với Admin";
+if(isAdmin) exportBtn.style.display="block";
 
-const ref=db.ref("chats/"+uid);
+// ================= SESSION =================
+const uid = localStorage.getItem("uid") || 
+            "uid_"+Date.now()+"_"+Math.random().toString(36).slice(2);
+localStorage.setItem("uid",uid);
 
-ref.on("child_added",s=>{
-  const m=s.val();
+const ref = db.ref("sessions/"+uid+"/messages");
+
+// ================= LOAD MSG =================
+if(isAdmin){
+  db.ref("sessions").on("child_added",snap=>{
+    snap.child("messages").forEach(m=>render(m.val()));
+  });
+}else{
+  ref.on("child_added",s=>render(s.val()));
+}
+
+// ================= RENDER =================
+function render(m){
   const d=document.createElement("div");
-  d.className="msg "+m.from;
-  d.innerText=m.name+": "+m.text;
+  d.className="msg "+(m.from==="admin"?"admin":"user");
+
+  if(m.type==="file"){
+    d.innerHTML=`📎 <a href="${m.url}" target="_blank">${m.name}</a>`;
+  }else{
+    d.innerText=m.text;
+  }
+
   msgs.appendChild(d);
   msgs.scrollTop=msgs.scrollHeight;
-});
+}
 
+// ================= SEND =================
 function send(){
-  if(!txt.value)return;
-  ref.push({
-    text:txt.value,
-    from:"me",
-    name:name,
-    time:Date.now()
+  if(txt.value){
+    ref.push({text:txt.value,from:isAdmin?"admin":"user",time:Date.now()});
+    db.ref("adminNotify").set({new:true});
+    txt.value="";
+  }
+
+  if(file.files.length){
+    const f=file.files[0];
+    const up=storage.ref("uploads/"+uid+"/"+f.name);
+    up.put(f).then(()=>{
+      up.getDownloadURL().then(url=>{
+        ref.push({
+          type:"file",name:f.name,url:url,
+          from:isAdmin?"admin":"user",time:Date.now()
+        });
+      });
+    });
+    file.value="";
+  }
+}
+
+// ================= ADMIN NOTIFY =================
+if(isAdmin){
+  db.ref("adminNotify").on("value",s=>{
+    if(s.val()?.new){
+      alert("📩 Có tin nhắn mới");
+      db.ref("adminNotify").set({new:false});
+    }
   });
-  txt.value="";
+}
+
+// ================= EXPORT EXCEL =================
+function exportExcel(){
+  db.ref("sessions").once("value",snap=>{
+    let csv="UID,From,Message,Time\n";
+    snap.forEach(s=>{
+      s.child("messages").forEach(m=>{
+        const v=m.val();
+        csv+=`${s.key},${v.from},${v.text||v.name},${new Date(v.time)}\n`;
+      });
+    });
+    const blob=new Blob([csv],{type:"text/csv"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download="chat_log.csv";
+    a.click();
+  });
 }
 </script>
+
 </body>
 </html>

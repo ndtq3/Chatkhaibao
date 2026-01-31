@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Admin</title>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+</head>
+
+<body>
+<h2>Inbox</h2>
+<div id="list"></div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "API_KEY",
+  authDomain: "PROJECT.firebaseapp.com",
+  databaseURL: "https://PROJECT.firebaseio.com",
+  projectId: "PROJECT"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+db.ref("chats").on("child_added",snap=>{
+  const uid=snap.key;
+  const box=document.createElement("div");
+  box.innerHTML=`<h4>${uid}</h4><div id="${uid}"></div>`;
+  list.appendChild(box);
+
+  db.ref("chats/"+uid).on("child_added",m=>{
+    const d=document.createElement("div");
+    d.innerText=m.val().text;
+    document.getElementById(uid).appendChild(d);
+  });
+});
+</script>
+</body>
+</html>

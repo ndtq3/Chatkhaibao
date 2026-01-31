@@ -5,18 +5,95 @@
 <title>Private Chat</title>
 
 <style>
-body{font-family:Arial;background:#eceff1}
-.box{width:380px;margin:20px auto;background:#fff;border-radius:12px;
-box-shadow:0 5px 20px rgba(0,0,0,.2);display:flex;flex-direction:column;height:520px}
-.header{background:#1976d2;color:#fff;padding:10px;border-radius:12px 12px 0 0}
-.msgs{flex:1;padding:10px;overflow-y:auto}
-.msg{max-width:70%;margin:6px 0;padding:8px 12px;border-radius:15px}
-.user{background:#e3f2fd;margin-left:auto}
-.admin{background:#c8e6c9}
-.input{display:flex;padding:10px;border-top:1px solid #ddd}
-input{flex:1;padding:8px;border-radius:20px;border:1px solid #ccc}
-button{margin-left:5px;border:none;background:#1976d2;color:white;padding:8px 14px;border-radius:20px}
-small{color:#666}
+body{
+  margin:0;
+  font-family:Arial;
+  background:#eef1f4;
+}
+
+.chat{
+  width:100%;
+  max-width:420px;
+  height:100vh;
+  margin:auto;
+  background:#fff;
+  display:flex;
+  flex-direction:column;
+}
+
+.header{
+  background:#1976d2;
+  color:#fff;
+  padding:14px;
+  font-weight:bold;
+  text-align:center;
+}
+
+.msgs{
+  flex:1;
+  padding:12px;
+  overflow-y:auto;
+  background:#f7f9fb;
+}
+
+.msg{
+  max-width:75%;
+  margin:6px 0;
+  padding:10px 14px;
+  border-radius:18px;
+  font-size:14px;
+  word-wrap:break-word;
+}
+
+.user{
+  background:#e3f2fd;
+  margin-left:auto;
+}
+
+.admin{
+  background:#c8e6c9;
+}
+
+.input{
+  border-top:1px solid #ddd;
+  padding:10px;
+}
+
+.row{
+  display:flex;
+  gap:6px;
+}
+
+.row input[type=text]{
+  flex:1;
+  padding:10px 14px;
+  border-radius:20px;
+  border:1px solid #ccc;
+}
+
+.row button{
+  border:none;
+  background:#1976d2;
+  color:#fff;
+  padding:0 16px;
+  border-radius:20px;
+  font-weight:bold;
+}
+
+.file{
+  margin-top:6px;
+}
+
+#export{
+  display:none;
+  margin:10px;
+  background:#2e7d32;
+  color:#fff;
+  border:none;
+  padding:10px;
+  border-radius:10px;
+  font-weight:bold;
+}
 </style>
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -26,87 +103,100 @@ small{color:#666}
 
 <body>
 
-<div class="box">
+<div class="chat">
   <div class="header" id="title">Chat</div>
+
   <div class="msgs" id="msgs"></div>
 
   <div class="input">
-    <input id="txt" placeholder="Nhập tin...">
-    <input type="file" id="file">
-    <button onclick="send()">Gửi</button>
+    <div class="row">
+      <input id="text" type="text" placeholder="Nhập tin nhắn...">
+      <button onclick="send()">Gửi</button>
+    </div>
+    <div class="file">
+      <input type="file" id="file">
+    </div>
   </div>
 
-  <button onclick="exportExcel()" style="margin:5px;display:none" id="exportBtn">
-    Xuất Excel
-  </button>
+  <button id="export" onclick="exportExcel()">Xuất Excel</button>
 </div>
 
 <script>
-// ================= FIREBASE CONFIG =================
-const firebaseConfig={
-  apiKey:"API_KEY",
-  authDomain:"PROJECT.firebaseapp.com",
-  databaseURL:"https://PROJECT.firebaseio.com",
-  projectId:"PROJECT",
-  storageBucket:"PROJECT.appspot.com"
+/* ================= FIREBASE ================= */
+const firebaseConfig = {
+  apiKey: "API_KEY",
+  authDomain: "PROJECT.firebaseapp.com",
+  databaseURL: "https://PROJECT.firebaseio.com",
+  projectId: "PROJECT",
+  storageBucket: "PROJECT.appspot.com"
 };
 firebase.initializeApp(firebaseConfig);
-const db=firebase.database();
-const storage=firebase.storage();
-// ===================================================
 
-// ================= ROLE =================
-const isAdmin = location.hash==="#admin";
+const db = firebase.database();
+const storage = firebase.storage();
+
+/* ================= ROLE ================= */
+const isAdmin = location.hash === "#admin";
 title.innerText = isAdmin ? "Admin Inbox" : "Chat với Admin";
-if(isAdmin) exportBtn.style.display="block";
+if(isAdmin) document.getElementById("export").style.display="block";
 
-// ================= SESSION =================
-const uid = localStorage.getItem("uid") || 
-            "uid_"+Date.now()+"_"+Math.random().toString(36).slice(2);
-localStorage.setItem("uid",uid);
-
-const ref = db.ref("sessions/"+uid+"/messages");
-
-// ================= LOAD MSG =================
-if(isAdmin){
-  db.ref("sessions").on("child_added",snap=>{
-    snap.child("messages").forEach(m=>render(m.val()));
-  });
-}else{
-  ref.on("child_added",s=>render(s.val()));
+/* ================= USER ID (KHÔNG MẤT CHAT) ================= */
+let uid = localStorage.getItem("chat_uid");
+if(!uid){
+  uid = "uid_" + Date.now() + "_" + Math.random().toString(36).slice(2);
+  localStorage.setItem("chat_uid", uid);
 }
 
-// ================= RENDER =================
-function render(m){
-  const d=document.createElement("div");
-  d.className="msg "+(m.from==="admin"?"admin":"user");
+/* ================= DATABASE REF ================= */
+const userRef = db.ref("sessions/" + uid + "/messages");
 
-  if(m.type==="file"){
-    d.innerHTML=`📎 <a href="${m.url}" target="_blank">${m.name}</a>`;
+/* ================= LOAD MESSAGE ================= */
+function render(m){
+  const d = document.createElement("div");
+  d.className = "msg " + (m.from === "admin" ? "admin" : "user");
+
+  if(m.type === "file"){
+    d.innerHTML = `📎 <a href="${m.url}" target="_blank">${m.name}</a>`;
   }else{
-    d.innerText=m.text;
+    d.innerText = m.text;
   }
 
   msgs.appendChild(d);
-  msgs.scrollTop=msgs.scrollHeight;
+  msgs.scrollTop = msgs.scrollHeight;
 }
 
-// ================= SEND =================
+if(isAdmin){
+  db.ref("sessions").on("child_added", s=>{
+    s.child("messages").forEach(m=>render(m.val()));
+    s.ref.child("messages").on("child_added", m=>render(m.val()));
+  });
+}else{
+  userRef.on("child_added", s=>render(s.val()));
+}
+
+/* ================= SEND ================= */
 function send(){
-  if(txt.value){
-    ref.push({text:txt.value,from:isAdmin?"admin":"user",time:Date.now()});
-    db.ref("adminNotify").set({new:true});
-    txt.value="";
+  if(text.value){
+    userRef.push({
+      text: text.value,
+      from: isAdmin ? "admin" : "user",
+      time: Date.now()
+    });
+    db.ref("notify").set({new:true});
+    text.value="";
   }
 
   if(file.files.length){
-    const f=file.files[0];
-    const up=storage.ref("uploads/"+uid+"/"+f.name);
-    up.put(f).then(()=>{
-      up.getDownloadURL().then(url=>{
-        ref.push({
-          type:"file",name:f.name,url:url,
-          from:isAdmin?"admin":"user",time:Date.now()
+    const f = file.files[0];
+    const ref = storage.ref("uploads/"+uid+"/"+f.name);
+    ref.put(f).then(()=>{
+      ref.getDownloadURL().then(url=>{
+        userRef.push({
+          type:"file",
+          name:f.name,
+          url:url,
+          from:isAdmin?"admin":"user",
+          time:Date.now()
         });
       });
     });
@@ -114,20 +204,20 @@ function send(){
   }
 }
 
-// ================= ADMIN NOTIFY =================
+/* ================= ADMIN NOTIFY ================= */
 if(isAdmin){
-  db.ref("adminNotify").on("value",s=>{
+  db.ref("notify").on("value", s=>{
     if(s.val()?.new){
       alert("📩 Có tin nhắn mới");
-      db.ref("adminNotify").set({new:false});
+      db.ref("notify").set({new:false});
     }
   });
 }
 
-// ================= EXPORT EXCEL =================
+/* ================= EXPORT EXCEL ================= */
 function exportExcel(){
-  db.ref("sessions").once("value",snap=>{
-    let csv="UID,From,Message,Time\n";
+  db.ref("sessions").once("value", snap=>{
+    let csv="UID,From,Content,Time\n";
     snap.forEach(s=>{
       s.child("messages").forEach(m=>{
         const v=m.val();
